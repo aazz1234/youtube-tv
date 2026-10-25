@@ -1,0 +1,1092 @@
+{
+ "_readme": "チャンネル設定（serve.py の自動更新・refresh.py・ページの表示が共通で使います）。ここだけ編集すればOK。max_duration_sec=全カテゴリ共通の長さ上限（秒。この値【未満】の動画だけを使う。ページ(CAP)・/native・serve.py・refresh.py が全部これを参照）。categories=ジャンルの定義（id/label=表示名/short=ボタン名/color=バッジ色/weight=再生ローテーションの出やすさ。順番がボタンの順番）。新しいジャンルを足すときは categories と channels の両方に同じ id を追加し、python3 refresh.py（または serve.py の起動）でページ側の一覧に反映されます。channels の name=表示名 / id=チャンネルID(UCで始まる24文字) / n=1チャンネルあたりの最大採用本数 / min=動画の最短秒数 / include=タイトルが一致するものだけ採用する正規表現 / exclude=一致したら除外する正規表現（\"@名前\" は presets の定義を参照）/ pick=newest か random。JSONなので正規表現のバックスラッシュは \\\\ と二重に書きます。",
+ "max_duration_sec": 600,
+ "categories": [
+  {
+   "id": "news",
+   "label": "ニュース",
+   "short": "ニュース",
+   "color": "#1f6fd1",
+   "weight": 2
+  },
+  {
+   "id": "mv",
+   "label": "ミュージックビデオ",
+   "short": "MV",
+   "color": "#d1438a",
+   "weight": 3
+  },
+  {
+   "id": "science",
+   "label": "科学・雑学",
+   "short": "科学・雑学",
+   "color": "#7a5af8",
+   "weight": 1
+  },
+  {
+   "id": "travel",
+   "label": "旅行・街の風景",
+   "short": "旅行・風景",
+   "color": "#0ea5a4",
+   "weight": 1
+  },
+  {
+   "id": "food",
+   "label": "グルメ・料理",
+   "short": "グルメ・料理",
+   "color": "#e8801a",
+   "weight": 1
+  },
+  {
+   "id": "animals",
+   "label": "動物",
+   "short": "動物",
+   "color": "#6fae1c",
+   "weight": 1
+  },
+  {
+   "id": "sports",
+   "label": "スポーツのハイライト",
+   "short": "スポーツ",
+   "color": "#e5484d",
+   "weight": 1
+  },
+  {
+   "id": "trailers",
+   "label": "予告編（アニメ・ゲーム・映画）",
+   "short": "予告編",
+   "color": "#a855f7",
+   "weight": 1
+  },
+  {
+   "id": "tech",
+   "label": "テクノロジー・ガジェット",
+   "short": "テック",
+   "color": "#3b82f6",
+   "weight": 1
+  },
+  {
+   "id": "history",
+   "label": "歴史・文化",
+   "short": "歴史・文化",
+   "color": "#b8860b",
+   "weight": 1
+  },
+  {
+   "id": "docs",
+   "label": "ドキュメンタリー",
+   "short": "ドキュメンタリー",
+   "color": "#2a9d6a",
+   "weight": 1
+  }
+ ],
+ "presets": {
+  "MV_EXCLUDE": "(?i)live|ライブ|lyric|歌詞|teaser|trailer|予告|spot|\\bcm\\b|making|メイキング|behind|reaction|interview|インタビュー|short ver|shorts|audio|visualizer|ダイジェスト|digest|tour|ドキュメント|first take|オフショット|コメント|告知|解禁|cover|カバー|medley|メドレー|ASMR|dance practice|踊ってみた|commentary|rehearsal|songline|highlight|募集|リクエスト|出演|instrumental|inst\\.|remix|visuali[sz]er|not a mv|film for|amazon music|ハイライト|特別映像|決定|番組|バレンタイン|クリスマス企画|from the vault|アルバム|album|\\bep\\b|trailer|初回|限定盤|発売|\\bcd\\b|\\bdvd\\b|blu-ray|記念|発表|公開|生放送|isolated|listening|recap|special program|スペシャル|concept|dance edit|director|edit\\b|ver\\.\\s*$",
+  "INTL_EXCLUDE": "(?i)live|ライブ|lyric|歌詞|teaser|trailer|予告|spot|\\bcm\\b|making|メイキング|behind|reaction|interview|インタビュー|short ver|shorts|audio|visualizer|ダイジェスト|digest|tour|ドキュメント|first take|オフショット|コメント|告知|解禁|cover|カバー|medley|メドレー|ASMR|dance practice|踊ってみた|commentary|rehearsal|songline|highlight|募集|リクエスト|出演|instrumental|inst\\.|remix|visuali[sz]er|not a mv|film for|amazon music|ハイライト|特別映像|決定|番組|バレンタイン|クリスマス企画|from the vault|アルバム|album|\\bep\\b|trailer|初回|限定盤|発売|\\bcd\\b|\\bdvd\\b|blu-ray|記念|発表|公開|生放送|isolated|listening|recap|special program|スペシャル|concept|dance edit|director|edit\\b|ver\\.\\s*$|\\bbts\\b|performance|vevo ?live|snippet|clip|remix|acoustic|session|karaoke",
+  "NEWS_EXCLUDE": "(?i)ライブ配信|LIVE\\s*配信|24時間|生配信|#shorts|【LIVE】|【ライブ】",
+  "GEN_EXCLUDE": "(?i)ライブ配信|LIVE\\s*配信|生配信|24時間|#shorts|【LIVE】|【ライブ】|プレミア公開|作業用|睡眠用|耐久|会員限定|メンバー限定",
+  "JA_TITLE": "[ぁ-んァ-ヶ一-龥]",
+  "SPORTS_INC": "ハイライト|(?i:highlight)|プレー|ゴール|ダイジェスト|名場面|サヨナラ|好守|ヒーロー",
+  "TRAILER_INC": "予告|特報|トレーラー|(?i:trailer|teaser)|ティザー|\\bPV\\b|ＰＶ|ローンチ|ゲームプレイ|特別映像",
+  "TRAILER_EXC": "(?i)ライブ配信|生配信|無料プレビュー|ブルーレイ|\\bDVD\\b|インタビュー|ノンクレジット|アフレコ|舞台挨拶|イベント|オーディオ|音声解説|ラジオ",
+  "DOC_EXC": "(?i)ライブ配信|生配信|24時間|#shorts|未公開|予告|PR動画|ダイジェスト|切り抜き|まとめ"
+ },
+ "policy": {
+  "news": {
+   "cap": 60,
+   "max_age_days": 3,
+   "min_keep": 15
+  },
+  "mv": {
+   "cap": 100
+  },
+  "science": {
+   "cap": 50
+  },
+  "travel": {
+   "cap": 50
+  },
+  "food": {
+   "cap": 50
+  },
+  "animals": {
+   "cap": 50
+  },
+  "sports": {
+   "cap": 50
+  },
+  "trailers": {
+   "cap": 50
+  },
+  "tech": {
+   "cap": 50
+  },
+  "history": {
+   "cap": 50
+  },
+  "docs": {
+   "cap": 50
+  }
+ },
+ "pick": {
+  "news": "newest",
+  "mv": "random",
+  "science": "random",
+  "travel": "random",
+  "food": "random",
+  "animals": "random",
+  "sports": "random",
+  "trailers": "random",
+  "tech": "random",
+  "history": "random",
+  "docs": "random"
+ },
+ "channels": {
+  "news": [
+   {
+    "name": "ANNnewsCH",
+    "id": "UCGCZAYq5Xxojl_tSXcVJhiQ",
+    "n": 8,
+    "min": 45,
+    "exclude": "@NEWS_EXCLUDE"
+   },
+   {
+    "name": "TBS NEWS DIG",
+    "id": "UC6AG81pAkf6Lbi_1VC5NmPA",
+    "n": 8,
+    "min": 45,
+    "exclude": "@NEWS_EXCLUDE"
+   },
+   {
+    "name": "日テレNEWS",
+    "id": "UCuTAXTexrhetbOe3zgskJBQ",
+    "n": 8,
+    "min": 45,
+    "exclude": "@NEWS_EXCLUDE"
+   },
+   {
+    "name": "FNNプライムオンライン",
+    "id": "UCoQBJMzcwmXrRSHBFAlTsIw",
+    "n": 8,
+    "min": 45,
+    "exclude": "@NEWS_EXCLUDE"
+   },
+   {
+    "name": "BBC News Japan",
+    "id": "UCCcey5CP5GDZeom987gqTdg",
+    "n": 5,
+    "min": 45,
+    "exclude": "@NEWS_EXCLUDE"
+   },
+   {
+    "name": "Reuters (English)",
+    "id": "UChqUTb7kYRX8-EiaN3XFrSQ",
+    "n": 3,
+    "min": 45,
+    "exclude": "@NEWS_EXCLUDE"
+   }
+  ],
+  "mv": [
+   {
+    "name": "米津玄師",
+    "id": "UCUCeZaZeJbEYAAzvMgrKOPQ",
+    "n": 3,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "OFFICIAL HIGE DANDISM",
+    "id": "UC3vg17IZ1IV73xx069jG44w",
+    "n": 3,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Vaundy",
+    "id": "UC1FQWQ3y3-e8l1pCtWhJt5A",
+    "n": 3,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Fujii Kaze",
+    "id": "UCNIy6zQyP7SuLEIaiwymfUA",
+    "n": 3,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "あいみょん",
+    "id": "UCQVhrypJhw1HxuRV4gX6hoQ",
+    "n": 3,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "King Gnu",
+    "id": "UCkB8HnJSDSJ2hkLQFUc-YrQ",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Creepy Nuts",
+    "id": "UCEc1YzMOSKKtJD7H-q71HgQ",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "back number",
+    "id": "UCgipy6-EqjT-1BCDndXX1PA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "RADWIMPS",
+    "id": "UCIVqvhyo8ttjYOmMJuhq_YQ",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "ヨルシカ",
+    "id": "UCRIgIJQWuBJ0Cv_VlU3USNA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Eve",
+    "id": "UCUXfRsEIJ9xO1DT7TbEWksw",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Mr.Children",
+    "id": "UCXteDRy5qB0IjA8WPusCJ7w",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "ずっと真夜中でいいのに。",
+    "id": "UCv6P5nsS9rP4tDtFlqLU_QQ",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "ONE OK ROCK",
+    "id": "UCzycs8MqvIY4nXWwS-v4J9g",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Ado",
+    "id": "UCln9P4Qm3-EAY4aiEPmRwEA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Aimer",
+    "id": "UCR1zT1s524Hbc85bdvno_8w",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "LiSA",
+    "id": "UCqEfdEvLG5oQWNYlDQrGlKw",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Hikaru Utada",
+    "id": "UChcgcbX3zMBwd0wTJyy2JlA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "星野源",
+    "id": "UCPKlrgZXnnb89nSeITvTdGA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "SEKAI NO OWARI",
+    "id": "UCKudwfXQgNM7Gkjv95qRI9w",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Perfume",
+    "id": "UCxOjoraUPd0Dq9PAyIhC6tQ",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "BABYMETAL",
+    "id": "UC33_tIj4m1_XaqfFcomShvw",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Tani Yuuki",
+    "id": "UCkPhQEwdob-Dc539qnJASvg",
+    "n": 2,
+    "min": 120,
+    "exclude": "@MV_EXCLUDE"
+   },
+   {
+    "name": "Taylor Swift",
+    "id": "UCqECaJ8Gagnn7YCbPEzWH6g",
+    "n": 2,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Ed Sheeran",
+    "id": "UC0C-w0YjGpqDXGB8IHb662A",
+    "n": 2,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Coldplay",
+    "id": "UCDPM_n1atn2ijUwHd0NNRQw",
+    "n": 2,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Imagine Dragons",
+    "id": "UCT9zcQNlyht7fRlcjmflRSA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Bruno Mars",
+    "id": "UCoUM-UJ7rirJYP8CQ0EIaHA",
+    "n": 2,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Maroon 5",
+    "id": "UCBVjMGOIkavEAhyqpxJ73Dw",
+    "n": 1,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Dua Lipa",
+    "id": "UC-J-KZfRV8c13fOCkhXdLiQ",
+    "n": 1,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   },
+   {
+    "name": "Billie Eilish",
+    "id": "UCiGm_E4ZwYSHV3bcW1pnSeQ",
+    "n": 1,
+    "min": 120,
+    "exclude": "@INTL_EXCLUDE"
+   }
+  ],
+  "science": [
+   {
+    "name": "国立科学博物館 かはくチャンネル",
+    "id": "UCYvB5iWkIf6uMeA9fPS__sw",
+    "n": 5,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "JAXA",
+    "id": "UCfMIdADo6FQayQCOkLYGhrQ",
+    "n": 5,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "国立天文台 NAOJ",
+    "id": "UCe3kXTl3OjqchQseJe3qmvg",
+    "n": 5,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "理化学研究所 rikenchannel",
+    "id": "UCIGmhpdcVev1Wc0YK7FHIig",
+    "n": 4,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "SCIENCE CHANNEL (JST)",
+    "id": "UCHpFyLQgg4h9VZuFyby7RbQ",
+    "n": 5,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "世界をわかりやすく (Kurzgesagt JP)",
+    "id": "UCzw2KK537iRgsrYnWaEMs8Q",
+    "n": 5,
+    "min": 240,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "サイエンスドリーム",
+    "id": "UCDy22j1Z7jDpyI14KWVgmQQ",
+    "n": 4,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "日経サイエンス",
+    "id": "UCpZrX4bUSwSKuLlnKRra3Lg",
+    "n": 3,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   }
+  ],
+  "travel": [
+   {
+    "name": "Visit Japan",
+    "id": "UCdXEm0IIg66FInF3D8RPVQQ",
+    "n": 4,
+    "min": 90,
+    "include": "@JA_TITLE",
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "visitjapan",
+    "id": "UCAF3bpYrvw_3RIkZ3OUnMNA",
+    "n": 4,
+    "min": 90,
+    "include": "@JA_TITLE",
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "TBS 世界遺産",
+    "id": "UCiBzP94GzT4C_aZ6-lw8zSA",
+    "n": 6,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "札幌観光協会 ようこそさっぽろ",
+    "id": "UCIeyUhp5Pb0IQxm7xKy4IBQ",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "沖縄観光コンベンションビューロー OCVB",
+    "id": "UCsIYRoyFN5U6QOZDYdtoXkg",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "日本散歩 4K",
+    "id": "UCUSbS73E6UGfQGH0gfHp0Jw",
+    "n": 4,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "JR東日本公式チャンネル",
+    "id": "UCioFlMsGwVfA-uWnn0ZWo_Q",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "TRAInBLAZER JR東日本",
+    "id": "UCMag2-qxmPmTgerSwT-g7MA",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "京都市観光協会",
+    "id": "UCFyohCp_Vx6WC82DiJ0l88w",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   }
+  ],
+  "food": [
+   {
+    "name": "デリッシュキッチン",
+    "id": "UC4YYMfsqUrejYXKnV--BydQ",
+    "n": 5,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "てぬキッチン",
+    "id": "UC1HZhN0HjriRUhqH7wGyRQg",
+    "n": 5,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "キユーピー3分クッキング",
+    "id": "UC8GfrG-GtxqSHtJSXI7jR1A",
+    "n": 5,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "AJINOMOTO PARK RECIPE",
+    "id": "UCxbv_OKLGqvkg3eDNEoDJpw",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "Tasty Japan",
+    "id": "UCilGprjH_UBgR5vLVXPff3Q",
+    "n": 5,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "コウケンテツ Kitchen",
+    "id": "UC3p5OTQsMEnmZktWUkw_Y0A",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "ミツカン公式チャンネル",
+    "id": "UCCD53J5wmUqltjiNWMQCB9g",
+    "n": 3,
+    "min": 90,
+    "exclude": "(?i)ライブ配信|生配信|24時間|#shorts|メイキング|会員限定"
+   },
+   {
+    "name": "レタスクラブ公式チャンネル",
+    "id": "UCyoLudYAKWaanYNY2SMfZ1w",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   }
+  ],
+  "animals": [
+   {
+    "name": "よこはま動物園ズーラシア",
+    "id": "UCJxedGtvmcB9GR6DoAN_FHA",
+    "n": 4,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "ナショナル ジオグラフィック TV",
+    "id": "UC1N2_2vCoyd3EvGcVuwTfmw",
+    "n": 4,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "どうぶつ奇想天外・WakuWaku",
+    "id": "UCZyTQOYz1pB7rV2EXKFTQdw",
+    "n": 4,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "那須どうぶつ王国",
+    "id": "UCp6QcfxkVaT77OVMXKKTJoQ",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "神戸どうぶつ王国",
+    "id": "UC9-vdbso1BCrfOIvMYye6Kg",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "鳥羽水族館",
+    "id": "UCQcj-JgG6XA0hGcTYWnK3ig",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "サンシャイン水族館",
+    "id": "UCnFS0WrXmUNelP9Ibs6umbw",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "しながわ水族館",
+    "id": "UCN2JsJYHPWEO_tMYRumlY6A",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "ねこのきもち",
+    "id": "UCVDC-29MbpnJMmp29pRXpmQ",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "東京ズーネット",
+    "id": "UC72bkkvKulLl_muXs0ygF_Q",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   }
+  ],
+  "sports": [
+   {
+    "name": "Jリーグ公式ハイライト",
+    "id": "UCyzs0YrgWiL2wdROpajnO1Q",
+    "n": 5,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "パ・リーグTV",
+    "id": "UC0v-pxTo1XamIDE-f__Ad0Q",
+    "n": 5,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "DAZN Japan",
+    "id": "UCoFLB_Gw_AoxUuuzKjXrc_Q",
+    "n": 4,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "B.LEAGUE",
+    "id": "UC4NpGzqd6nnntf8ehYC50-A",
+    "n": 4,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "日本野球機構 NPB",
+    "id": "UC9SoTt4kJ_qhyBF9k9OGl3g",
+    "n": 3,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "JFATV",
+    "id": "UCgIeUSV91-FfmCayG4lSBcw",
+    "n": 3,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "SV.LEAGUE",
+    "id": "UC50fvwgEsELna_WzlQsy1FQ",
+    "n": 3,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "日テレスポーツ",
+    "id": "UCWt0yfrBaUk148rxaOp4b4w",
+    "n": 2,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "TBS スポーツ",
+    "id": "UCzrG47dhJ8vZyc5uEzSIh7A",
+    "n": 2,
+    "min": 90,
+    "include": "@SPORTS_INC",
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   }
+  ],
+  "trailers": [
+   {
+    "name": "東宝MOVIEチャンネル",
+    "id": "UCTDMT3aL30noTVFgNPA9XtQ",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "松竹チャンネル",
+    "id": "UCulneJtjMARpEHhWQTlGa6w",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "東映アニメーション",
+    "id": "UCLhgIX2L5ZCaWdlaxR_oTAg",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "ワーナー ブラザース",
+    "id": "UCSrwpEM8lBM4jR5YoKX3XOQ",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "ソニー・ピクチャーズ 映画",
+    "id": "UCx-l79NDhpI8GDyl_A_C1Ew",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "ユニバーサル・ピクチャーズ",
+    "id": "UC9llDCAObCbGpsaa66fClKw",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "アニプレックス",
+    "id": "UC14QT5j2nQI8lKBCGtrrBQA",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "TOHO animation",
+    "id": "UC14Yc2Qv92DMuyNRlHvpo2Q",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "KADOKAWAanime",
+    "id": "UCY5fcqgSrQItPAX_Z5Frmwg",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "Netflix Anime",
+    "id": "UCBSs9x2KzSLhyyA9IKyt4YA",
+    "n": 2,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "Nintendo 公式",
+    "id": "UCkH3CcMfqww9RsZvPRPkAJA",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "PlayStation Japan",
+    "id": "UCaghC0OZwAdidMrbvxkcrPg",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "スクウェア・エニックス",
+    "id": "UC6SmH9mR82nj28_NNg_rZvA",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "CAPCOM",
+    "id": "UCyuEAZQzRqhcaLZvQd9ZUNA",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   },
+   {
+    "name": "Bandai Namco Entertainment",
+    "id": "UCqly9F4Fr_jf2Y1Cy5hacRg",
+    "n": 3,
+    "min": 30,
+    "include": "@TRAILER_INC",
+    "exclude": "@TRAILER_EXC",
+    "pick": "newest"
+   }
+  ],
+  "tech": [
+   {
+    "name": "ITmedia NEWS",
+    "id": "UCiaJg01CSD75sYvZIe1Oi9A",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "ITmedia",
+    "id": "UCLg3KwJJtuWBco2Lui0EqLw",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "Impress Watch",
+    "id": "UCQW3tGdtKlogo-bgihiTZww",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "アスキー",
+    "id": "UCeJYDunL9xZtmczAP9AGmFA",
+    "n": 4,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   },
+   {
+    "name": "Apple Japan",
+    "id": "UCv5iVjD-tFfl04V4AB4XRYw",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "Google Japan",
+    "id": "UCTnRxVUPssiL7H29ON07t_Q",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "Sony (Japan)",
+    "id": "UCuGpOs5ec2FuqqP21d05nqQ",
+    "n": 3,
+    "min": 60,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "日経クロステック",
+    "id": "UCwPgJIiUAYhdN3AYkmm5YYA",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE",
+    "pick": "newest"
+   }
+  ],
+  "history": [
+   {
+    "name": "国立公文書館",
+    "id": "UCMxciVR8LW6Tq0oEc3JqI_Q",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "東京国立博物館",
+    "id": "UCi4kijTbqPOh1LPN2f0eQYg",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "KADOKAWA最強歴史チャンネル",
+    "id": "UCF6yn1BlUaz3O8Rj3HwzsEw",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "サクッと歴史雑学",
+    "id": "UCXmvNz5emBqGmZKHSyROXqA",
+    "n": 4,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "YouTube高校 日本史・世界史",
+    "id": "UCGdGyJ6N07dvumQSTOCEOQg",
+    "n": 3,
+    "min": 120,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "日本史ショートマスター",
+    "id": "UCBEL5xaTijD2ITp9oe4qpKQ",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "『ねこねこ日本史』公式",
+    "id": "UCurj79EhUXRhFgMQTkKsSSg",
+    "n": 3,
+    "min": 120,
+    "exclude": "(?i)ライブ配信|生配信|無料|一週間|まとめ|作業用"
+   },
+   {
+    "name": "伝統工芸 青山スクエア",
+    "id": "UC3N0EPxNFKDFKHFNhB9YaZw",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   },
+   {
+    "name": "HISTORY公式",
+    "id": "UC9I5l3CeCsxFdE0p0USWC9g",
+    "n": 3,
+    "min": 90,
+    "exclude": "@GEN_EXCLUDE"
+   }
+  ],
+  "docs": [
+   {
+    "name": "Yahoo!ニュース ドキュメンタリー",
+    "id": "UCZ2ISzwB9hpJy81zOsI4Vwg",
+    "n": 5,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "CBCドキュメンタリー",
+    "id": "UC_tosV-ZWt55wbpBAYE-78w",
+    "n": 4,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "情熱大陸 公式",
+    "id": "UChrwWDsptJWqbV_oPKdHk1Q",
+    "n": 5,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "ドキュメンタリージャパン",
+    "id": "UCt1SvhCz9VyfAFWVjf91hWw",
+    "n": 4,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "ドキュメンタリー・ジャポン",
+    "id": "UCqrIdqQjb6KUBEVCkynROMA",
+    "n": 3,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "PEOPLE IN FOCUS",
+    "id": "UC87YTa93c_TBEbmFZdcJ3Qg",
+    "n": 4,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "日本スゴ技",
+    "id": "UClrb_6nesUMO7glZairxicw",
+    "n": 3,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "ニッポン手仕事図鑑",
+    "id": "UClxNsCMCLEyNnFl46ASTyVw",
+    "n": 4,
+    "min": 150,
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "日テレNEWS (特集・密着)",
+    "id": "UCuTAXTexrhetbOe3zgskJBQ",
+    "n": 3,
+    "min": 150,
+    "include": "every\\.特集|密着|NNNセレクション|ドキュメンタリー|特集",
+    "exclude": "@DOC_EXC"
+   },
+   {
+    "name": "フジテレビドキュメンタリー",
+    "id": "UCvF8OEpJPsM-JWhTWzvX3fw",
+    "n": 3,
+    "min": 150,
+    "include": "ノンフィクション|ドキュメンタリー|密着|警察24時|ルポ|特集",
+    "exclude": "ノンストップ|サンデー|ベタ旅|めざまし|とくダネ|ワイド"
+   },
+   {
+    "name": "Great Big Story",
+    "id": "UCajXeitgFL-rb5-gXI-aG8Q",
+    "n": 3,
+    "min": 120,
+    "include": "@JA_TITLE",
+    "exclude": "@DOC_EXC"
+   }
+  ]
+ }
+}
