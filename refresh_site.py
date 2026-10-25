@@ -6,7 +6,9 @@
   python refresh_site.py --dry-run   # 結果を表示するだけ（何も書かない）
 
 流れ:  channels.json の各チャンネル → RSS → (だめなら) yt-dlp → (どちらもだめなら) 前回の結果を保持
-       長さは yt-dlp で確認（全ジャンル max_duration_sec=600秒【未満】）、埋め込み可否は oEmbed で確認。
+       【厳格】長さが「分かっている」 20秒以上 max_duration_sec(600秒)【未満】で、ライブ/配信アーカイブでない動画だけを videos.json に残す。
+       長さは yt-dlp の /videos タブ一覧(duration)か、個別確認(1回の更新で最大 RESOLVE_MAX=150本、結果は state.json の durs に記憶)で得る。
+       分からない動画は出力しない（次回の更新で再挑戦）。埋め込み可否は oEmbed で確認。
 安全装置: 1チャンネルも取得できなかった / 新しいリストが前回の50%未満 / エラー のときは何も書きません
           （終了コード: 0=更新した or 変更なし, 1=失敗して何も書かなかった）。
 """
@@ -23,7 +25,7 @@ sys.path.insert(0, HERE)
 import ytv_common as C
 import ytv_core as K
 
-K.RESOLVE_MAX = int(os.environ.get("RESOLVE_MAX", "120"))      # 1回の更新で yt-dlp で長さを調べる動画の上限（ローカル版は40）
+K.RESOLVE_MAX = int(os.environ.get("RESOLVE_MAX", "150"))      # 1回の更新で yt-dlp で個別に長さを調べる動画の上限（残りは次回。45分のタイムアウト内）
 MIN_RATIO = 0.5            # 新しいリストが前回の何割未満なら書かないか
 
 
@@ -34,6 +36,17 @@ def gha(kind, msg):
 
 def count(videos):
     return sum(len(v) for v in videos.values())
+
+
+def count_valid(videos, cap):
+    """長さが分かっていて上限未満の動画の本数（前回比の安全装置に使う。長さ不明の古い動画は数えない）"""
+    return sum(1 for v in videos.values() for x in v if K.is_ok(x, cap))
+
+
+def assert_strict(videos, cap):
+    bad = [(c, x.get("id")) for c, v in videos.items() for x in v if not K.is_ok(x, cap)]
+    if bad:
+        raise RuntimeError("厳格フィルタに通らない動画が残っています: %s" % bad[:5])
 
 
 def slim(videos):
@@ -54,7 +67,8 @@ def main(argv):
     cfg = C.load_config()
     gen_static, static = K.load_static()
     cache = K.load_cache()
-    prev_total = count(cache["videos"]) if cache else count(static)
+    cap = cfg.get("max_duration") or C.MAX_DURATION_DEFAULT
+    prev_total = count_valid(cache["videos"], cap) if cache else count_valid(static, cap)   # 長さ不明の分は数えない（初回の一掃で減っても止まらないように）
     cids = sorted({ch["id"] for c in C.CATS for ch in cfg["channels"][c]})
     fetched, srcs = {}, {"rss": 0, "ytdlp": 0, "none": 0}
 
@@ -72,8 +86,11 @@ def main(argv):
     now = int(time.time())
     new, stats = K.compose(cfg, static, cache, fetched, now, static_gen=gen_static)
     total = count(new["videos"])
-    K.log("新着%d本 / 合計 %d本（前回 %d本） " % (stats["new"], total, prev_total) +
+    K.log("新着%d本 / 合計 %d本（前回の有効分 %d本） " % (stats["new"], total, prev_total) +
           " ".join("%s=%d" % (c, len(new["videos"][c])) for c in C.CATS))
+    K.log("長さの個別確認: %d本 (成功%d / 失敗%d) 未確認のまま残り %d本 %s" % (stats["probed"], stats["probe_ok"], stats["probe_fail"],
+          stats["unknown_left"], ("最後のエラー: " + stats["probe_err"]) if stats["probe_err"] else ""))
+    assert_strict(new["videos"], cap)
     if prev_total and total < prev_total * MIN_RATIO:
         gha("error", "新しいリストが前回の%d%%未満（%d本 < %d本）のため、書き込みません。" % (MIN_RATIO * 100, total, prev_total))
         return 1
@@ -86,7 +103,14 @@ def main(argv):
         K.log("--dry-run: 書き込みません（%d秒）" % (time.time() - t0))
         return 0
     write_json(os.path.join(HERE, "state.json"), out)
-    write_json(os.path.join(HERE, "videos.json"), {"generated": out["generated"], "videos": slim(out["videos"])}, indent=None)
+    pub = slim(out["videos"])
+    write_json(os.path.join(HERE, "videos.json"), {"generated": out["generated"], "videos": pub}, indent=None)
+    for f in (K.HTML_FILE, K.NATIVE_FILE):            # 内蔵フォールバックリストも厳格フィルタ済みの内容に揃える
+        try:
+            if C.sync_embedded(f, out["generated"], pub):
+                K.log("内蔵リストを更新:", os.path.basename(f))
+        except Exception as e:
+            K.log("内蔵リストの更新に失敗:", os.path.basename(f), e)
     for f in (K.HTML_FILE, K.NATIVE_FILE):            # channels.json のジャンル定義が変わっていたらページにも反映
         try:
             if C.sync_page(f):

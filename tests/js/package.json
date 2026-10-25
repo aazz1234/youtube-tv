@@ -1,0 +1,1 @@
+{"name":"ytv-tests","private":true,"version":"1.0.0","scripts":{"test":"node native.test.js && node index.test.js"},"devDependencies":{"jsdom":"^24.0.0"}}

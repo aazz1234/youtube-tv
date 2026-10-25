@@ -138,54 +138,105 @@ _yt_lock = threading.Lock()
 _yt_state = {"ok": 0, "fail": 0}
 
 
+FLAT_END = 30                     # チャンネルの /videos タブから取る本数（flat-playlist。長さ duration つき）
+LIVE_STATUSES = ("is_live", "is_upcoming", "post_live", "was_live")
+
+
+def _flat_entries(d, cid):
+    """yt-dlp --flat-playlist の結果 → [{id,t,p,d,ls}]。ライブ/配信予定/配信終了(アーカイブ)は除く。長さ不明は d=0。"""
+    out = []
+    if not d or (d.get("channel_id") != cid and d.get("playlist_channel_id") != cid):
+        return out
+    for e in d.get("entries") or []:
+        if not e or not ID_RE.match(str(e.get("id", ""))):
+            continue
+        if e.get("live_status") in LIVE_STATUSES or e.get("was_live"):
+            continue
+        p = e.get("timestamp") or 0
+        if not p and e.get("upload_date"):
+            p = parse_iso("%s-%s-%sT00:00:00+09:00" % (e["upload_date"][:4], e["upload_date"][4:6], e["upload_date"][6:8]))
+        try:
+            dur = int(float(e.get("duration") or 0))
+        except (TypeError, ValueError):
+            dur = 0
+        out.append({"id": e["id"], "t": e.get("title") or e["id"], "p": int(p or 0), "d": dur})
+    return out
+
+
 def fetch_ytdlp(cid):
-    """yt-dlp で最新動画一覧 → [{id,t,p,d}]。使えない/失敗は None。連続失敗が続いたら以後あきらめる(無駄な待ちを避ける)。"""
+    """yt-dlp で /videos タブ(ショート除く)の最新動画一覧 → [{id,t,p,d}]（d=長さ秒。タブの一覧に含まれる）。使えない/失敗は None。
+    連続失敗が続いたら以後あきらめる(無駄な待ちを避ける)。"""
     cmd = ytdlp_cmd()
     if not cmd:
         return None
     with _yt_lock:
         if _yt_state["ok"] == 0 and _yt_state["fail"] >= 3:
             return None
-    try:
-        r = subprocess.run(cmd + ["-q", "--no-warnings", "--flat-playlist", "--playlist-end", "15", "--dump-single-json",
-                                  "--extractor-args", "youtube:lang=ja", "https://www.youtube.com/channel/%s/videos" % cid],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90)
-        d = json.loads(r.stdout, strict=False) if r.stdout.strip() else None
-    except Exception:
-        d = None
-    out = []
-    if d and d.get("channel_id") == cid:
-        for e in d.get("entries") or []:
-            if not e or not ID_RE.match(str(e.get("id", ""))) or e.get("live_status") in ("is_live", "is_upcoming", "post_live"):
-                continue
-            p = e.get("timestamp") or 0
-            if not p and e.get("upload_date"):
-                p = parse_iso("%s-%s-%sT00:00:00+09:00" % (e["upload_date"][:4], e["upload_date"][4:6], e["upload_date"][6:8]))
-            out.append({"id": e["id"], "t": e.get("title") or e["id"], "p": int(p or 0), "d": int(e.get("duration") or 0)})
+    d = None
+    for attempt in range(2):
+        try:
+            r = subprocess.run(cmd + ["-q", "--no-warnings", "--flat-playlist", "--playlist-end", str(FLAT_END), "--dump-single-json",
+                                      "--extractor-args", "youtube:lang=ja", "https://www.youtube.com/channel/%s/videos" % cid],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+            d = json.loads(r.stdout, strict=False) if r.stdout.strip() else None
+        except Exception:
+            d = None
+        if d:
+            break
+        time.sleep(2)
+    out = _flat_entries(d, cid)
     with _yt_lock:
         _yt_state["ok" if out else "fail"] += 1
     return out or None
 
 
 def fetch_channel(cid):
-    """(source, entries)。source: 'rss' | 'ytdlp' | None"""
+    """(source, entries)。source: 'ytdlp'(長さつき。RSSの公開日時を足す) | 'rss'(長さなし→あとで個別に調べる) | None"""
+    rss = None
     try:
-        r = fetch_rss(cid)
-        if r:
-            return "rss", r
+        rss = fetch_rss(cid)
     except Exception as e:
         log("RSS取得エラー", cid, e)
     try:
-        r = fetch_ytdlp(cid)
-        if r:
-            return "ytdlp", r
+        yt = fetch_ytdlp(cid)
     except Exception as e:
         log("yt-dlp取得エラー", cid, e)
+        yt = None
+    if yt:
+        pub = {x["id"]: x["p"] for x in (rss or [])}
+        for x in yt:
+            x["p"] = x["p"] or pub.get(x["id"], 0)
+        return "ytdlp", yt
+    if rss:
+        return "rss", rss
     return None, None
 
 
-def select_for_channel(entries, ch, cat, pol, now):
-    """チャンネル設定(include/exclude/長さ)とカテゴリ方針で絞り、新しい順に最大 n 本。"""
+# ------------------------------------------------------------------ 厳格フィルタ（長さが「分かっていて」上限未満のものだけ使う）
+MIN_SEC = 20                       # これ未満(秒)は使わない
+HARD_TITLE_RE = re.compile(r"(?i)ライブ配信|生配信|生放送|アーカイブ|作業用\s*BGM|睡眠用|【\s*\d+\s*時間|\d+\s*時間(?!前|以内|後|目|ぶり|半|経過|の間)|\d+\s*hours?\b(?!\s*ago)|24\s*/\s*7|live\s*stream|livestream|live\s*archive")
+SOFT_TITLE_RE = re.compile(r"(?i)耐久|【\s*live\s*】|\[\s*live\s*\]|ライブ中継|ニュースライブ|ライブ\s*】")
+MV_TITLE_RE = re.compile(r"(?i)\bM/?V\b|music\s*video|official\s*video|trailer|予告|\bPV\b|teaser|予告編")
+
+
+def title_is_longform(t):
+    """タイトルから「ライブ配信のアーカイブ・長時間まとめ」と分かるもの。MV/予告編と分かるタイトルは SOFT のみ免除（HARD は常に除外）。"""
+    t = t or ""
+    if HARD_TITLE_RE.search(t):
+        return True
+    return bool(SOFT_TITLE_RE.search(t)) and not MV_TITLE_RE.search(t)
+
+
+def is_ok(x, cap=None, d=None):
+    """この動画を使ってよいか: 長さが分かっている / MIN_SEC 以上 cap 未満 / ライブ・アーカイブ風のタイトルでない。"""
+    cap = cap or C.MAX_DURATION_DEFAULT
+    dd = int(d if d is not None else (x.get("d") or 0))
+    return MIN_SEC <= dd < cap and not title_is_longform(x.get("t"))
+
+
+def select_for_channel(entries, ch, cat, pol, now, dmap=None):
+    """チャンネル設定(include/exclude/長さ)とカテゴリ方針で絞り、新しい順に最大 n 本。
+    長さ不明のものは候補として残す（あとで個別に調べ、分からなければ最終的に落とす）。dmap: {id: 長さ} 既知の長さ。"""
     inc, exc = C.compile_or_none(ch.get("include")), C.compile_or_none(ch.get("exclude"))
     max_age = pol.get("max_age_days")
     res = []
@@ -195,8 +246,10 @@ def select_for_channel(entries, ch, cat, pol, now):
             continue
         if exc and exc.search(t):
             continue
-        d = e.get("d") or 0
-        if d and not (ch["min"] <= d <= ch["max"]):
+        if title_is_longform(t):
+            continue
+        d = e.get("d") or (dmap or {}).get(e["id"]) or 0
+        if d and not (max(ch["min"], MIN_SEC) <= d <= ch["max"]):
             continue
         if max_age and e["p"] and now - e["p"] > max_age * 86400:
             continue
@@ -225,31 +278,53 @@ def verify_ids(ids):
     return out
 
 
-# ------------------------------------------------------------------ 長さの確認 (RSSには長さが無い)
-RESOLVE_MAX = 40            # 1回の更新で長さを調べる動画の上限（YouTube に優しく）
-RESOLVE_WORKERS = 2
+# ------------------------------------------------------------------ 長さの確認 (RSS由来・前回リスト由来で長さが無いもの。yt-dlp で1本ずつ)
+RESOLVE_MAX = 150           # 1回の更新で個別に長さを調べる動画の上限（残りは次回。45分のタイムアウト内に収まる量）
+RESOLVE_WORKERS = 4
+PROBE_CLIENTS = "web_safari,mweb"      # bot判定(Sign in to confirm)を避けやすいクライアント。--ignore-no-formats-error で形式なしでも情報だけ取る
+FAIL_RETRY_AFTER = 3 * 86400           # 5回失敗した動画は、この期間は再確認しない
+_probe_stats = {"ok": 0, "fail": 0, "err": ""}
 
 
 def probe_duration(vid):
-    """yt-dlp で (長さ秒 or None, ライブ/配信予定か)。yt-dlp が無い/失敗は (None, False)。"""
+    """yt-dlp で (長さ秒 or None, ライブ/配信予定/配信アーカイブか)。長さが取れなかったら (None, False)。"""
     cmd = ytdlp_cmd()
     if not cmd:
         return None, False
     try:
-        r = subprocess.run(cmd + ["-q", "--no-warnings", "--skip-download", "--no-playlist", "--print", "%(duration)s|%(live_status)s",
-                                  "https://www.youtube.com/watch?v=" + vid],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40)
-        line = (r.stdout.strip().splitlines() or [""])[-1]
-        dur, _, live = line.partition("|")
-        return (int(float(dur)) if dur not in ("", "NA", "None") else None), live in ("is_live", "is_upcoming", "post_live")
-    except Exception:
+        for attempt in range(2):
+            r = subprocess.run(cmd + ["-q", "--no-warnings", "--skip-download", "--no-playlist", "--ignore-no-formats-error",
+                                      "--extractor-args", "youtube:player_client=" + PROBE_CLIENTS,
+                                      "--print", "%(.{duration,live_status,was_live})j", "https://www.youtube.com/watch?v=" + vid],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            line = (r.stdout.strip().splitlines() or [""])[-1]
+            try:
+                j = json.loads(line)
+            except Exception:
+                j = None
+            if j is not None:
+                live = j.get("live_status") in LIVE_STATUSES or bool(j.get("was_live"))
+                dur = j.get("duration")
+                _probe_stats["ok"] += 1
+                if live:
+                    return None, True
+                return (int(float(dur)) if dur else None), False
+            _probe_stats["err"] = (r.stderr.strip().splitlines() or ["?"])[-1][:200]
+            if re.search(r"unavailable|private|removed|terminated|not available|copyright", r.stderr, re.I):
+                break                         # 削除済みなどは再試行しない
+            time.sleep(1.5)
+        _probe_stats["fail"] += 1
+        return None, False
+    except Exception as e:
+        _probe_stats["fail"] += 1
+        _probe_stats["err"] = "%s: %s" % (type(e).__name__, e)
         return None, False
     finally:
-        time.sleep(0.4)
+        time.sleep(0.3)
 
 
 def resolve_durations(ids):
-    """{id: (長さ秒 or None, ライブか)}。yt-dlp があるときだけ、最大 RESOLVE_MAX 本を調べる。"""
+    """{id: (長さ秒 or None, ライブか)}。yt-dlp があるときだけ、最大 RESOLVE_MAX 本を RESOLVE_WORKERS 並列で調べる。"""
     ids = list(ids)[:RESOLVE_MAX]
     if not ids or not ytdlp_cmd():
         return {}
@@ -257,17 +332,62 @@ def resolve_durations(ids):
         return dict(zip(ids, ex.map(probe_duration, ids)))
 
 
+def norm_durs(raw):
+    """state.json の durs → {id: [長さ(0=不明), ライブ(0/1), 確認した時刻, 失敗回数]}（旧形式の整数も受け付ける）"""
+    out = {}
+    for k, v in (raw or {}).items():
+        if isinstance(v, (int, float)) and v > 0:
+            out[k] = [int(v), 0, 0, 0]
+        elif isinstance(v, (list, tuple)) and len(v) >= 4:
+            try:
+                out[k] = [int(v[0] or 0), 1 if v[1] else 0, int(v[2] or 0), int(v[3] or 0)]
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
 # ------------------------------------------------------------------ リスト合成
 def ts_of(v):
     return v.get("p") or v.get("a") or 0
 
 
+def order_cat(c, items, fresh_ids, p, now):
+    """カテゴリごとの方針で並べる（上限で切る前の並び）。"""
+    if c == "news":
+        max_age = (p.get("max_age_days") or 3) * 86400
+        freshn = sorted([x for x in items if ts_of(x) and now - ts_of(x) <= max_age], key=lambda x: -ts_of(x))
+        fid = {x["id"] for x in freshn}
+        rest = sorted([x for x in items if x["id"] not in fid], key=lambda x: -ts_of(x))
+        lst = freshn
+        if len(lst) < p.get("min_keep", 15):        # 新しいものが少なければ、古いものでも最低本数は確保
+            lst = lst + rest[: p.get("min_keep", 15) - len(lst)]
+        return lst
+    if c != "mv":          # docs ほか: 新着 → 標準リスト → その他（新しい順）
+        newf = sorted([x for x in items if x["id"] in fresh_ids], key=lambda x: -ts_of(x))
+        st = [x for x in items if x.get("s") and x["id"] not in fresh_ids]
+        oth = sorted([x for x in items if not x.get("s") and x["id"] not in fresh_ids], key=lambda x: -ts_of(x))
+        return newf + st + oth
+    st = [x for x in items if x.get("s")]            # mv: 厳選(標準)は全部残し、新着+既存の新しい順で上限まで
+    oth = sorted([x for x in items if not x.get("s")], key=lambda x: -ts_of(x))
+    return st + oth
+
+
 def compose(cfg, static, cache, fetched, now, verify=verify_ids, static_gen="", durations=resolve_durations):
-    """新しいキャッシュ内容を作る。fetched: {cid: entries or None}。失敗しても既存リストは消さない。
-    長さが max_duration 以上と分かっている動画は、標準リスト・前回の結果・新着のどれからも除く。"""
+    """新しいキャッシュ内容を作る。fetched: {cid: entries or None}。取得に失敗しても、長さが確認済みの既存リストは消さない。
+    【厳格】長さが「分かっていて」 MIN_SEC 以上 cap(=max_duration_sec)未満で、ライブ/配信アーカイブでない動画だけを残す。
+    長さ不明の動画は yt-dlp で個別に調べ（durs に記憶。失敗も記憶して次回再挑戦）、分からないうちは絶対に出力しない。"""
     pol = cfg["policy"]
     cap = cfg.get("max_duration") or C.MAX_DURATION_DEFAULT
-    durs = {k: int(v) for k, v in ((cache or {}).get("durs") or {}).items() if isinstance(v, (int, float))}
+    durs = norm_durs((cache or {}).get("durs"))
+    dmap = {}                                           # 今回の取得で分かった長さ(タブ一覧の duration)
+    for ents in fetched.values():
+        for e in ents or []:
+            if e.get("d"):
+                dmap[e["id"]] = int(e["d"])
+    for i, rec in durs.items():                         # 個別確認で分かっていた長さ
+        if rec[0] and i not in dmap:
+            dmap[i] = rec[0]
+    live_ids = {i for i, rec in durs.items() if rec[1]}
     static_ids = {v["id"]: c for c in C.CATS for v in static[c]}
     prev = {c: [] for c in C.CATS}
     if cache:
@@ -294,6 +414,8 @@ def compose(cfg, static, cache, fetched, now, verify=verify_ids, static_gen="", 
                 continue
             if v["id"] in old[c]:
                 old[c][v["id"]].update({k: x[k] for k in ("p", "a") if x[k]})   # (a は前回の初出時刻を優先)
+                if x["d"] and not old[c][v["id"]]["d"]:
+                    old[c][v["id"]]["d"] = x["d"]
             else:
                 old[c][v["id"]] = x
 
@@ -305,10 +427,8 @@ def compose(cfg, static, cache, fetched, now, verify=verify_ids, static_gen="", 
             ents = fetched.get(ch["id"])
             if not ents:
                 continue
-            for x in select_for_channel(ents, ch, c, pol[c], now):
-                if not x["d"] and durs.get(x["id"]):
-                    x["d"] = durs[x["id"]]
-                if x["id"] in bad or owner.get(x["id"], c) != c or (x["d"] and x["d"] >= cap):
+            for x in select_for_channel(ents, ch, c, pol[c], now, dmap):
+                if x["id"] in bad or x["id"] in live_ids or owner.get(x["id"], c) != c or (x["d"] and x["d"] >= cap):
                     continue
                 owner[x["id"]] = c
                 fresh[c][x["id"]] = x
@@ -329,46 +449,61 @@ def compose(cfg, static, cache, fetched, now, verify=verify_ids, static_gen="", 
             y.setdefault("a", now)
             m[i] = y
         merged[c] = m
+    for c in C.CATS:                                   # 長さを補う（タブ一覧/個別確認で分かっているもの）
+        for i, y in merged[c].items():
+            if i in dmap:
+                y["d"] = dmap[i]
 
-    # カテゴリごとの方針で並べて上限で切る
+    def usable(x):                                     # 長さ不明でも「まだ調べられる」ものは候補に残す（最終出力では必ず除く）
+        i = x["id"]
+        if i in bad or i in live_ids or title_is_longform(x.get("t")):
+            return False
+        d = x.get("d") or 0
+        return (MIN_SEC <= d < cap) if d else True
+
+    # 長さ不明の動画を yt-dlp で個別に調べる。並びの上位（cap+20）に入る不明なものを、予算(RESOLVE_MAX)の範囲で何度か繰り返す。
+    tried, budget, probed_n = set(), RESOLVE_MAX, 0
+    for _round in range(8):
+        unk = {}
+        for c in C.CATS:
+            items = [x for x in merged[c].values() if usable(x)]
+            lst = order_cat(c, items, set(fresh[c]), pol[c], now)[: pol[c].get("cap", 60) + 20]
+            for x in lst:
+                if not x.get("d") and x["id"] not in tried:
+                    rec = durs.get(x["id"])
+                    if rec and rec[3] >= 5 and now - rec[2] < FAIL_RETRY_AFTER:
+                        tried.add(x["id"])          # 何度も失敗した動画はしばらく休ませる（出力はされない）
+                        continue
+                    unk[x["id"]] = (rec[3] if rec else 0, -ts_of(x))
+        ids = sorted(unk, key=lambda i: unk[i])[:budget]        # 失敗の少ないもの → 新しいものから
+        if not ids:
+            break
+        res = durations(ids)
+        budget -= len(ids)
+        probed_n += len(ids)
+        for i in ids:
+            tried.add(i)
+            dur, live = res.get(i, (None, False))
+            rec = durs.get(i) or [0, 0, 0, 0]
+            if live:
+                durs[i] = [0, 1, now, 0]
+                live_ids.add(i)
+            elif dur:
+                durs[i] = [int(dur), 0, now, 0]
+                dmap[i] = int(dur)
+            elif i in res:
+                durs[i] = [0, 0, now, rec[3] + 1]       # 不明のまま記憶 → 次回また調べる（出力はしない）
+        for c in C.CATS:
+            for i, y in merged[c].items():
+                if i in dmap:
+                    y["d"] = dmap[i]
+        if budget <= 0:
+            break
+
     pool = {}
     for c in C.CATS:
-        p = pol[c]
-        items = list(merged[c].values())
-        items = [x for x in items if x["id"] not in bad and not (x.get("d") and x["d"] >= cap)]
-        if c == "news":
-            max_age = (p.get("max_age_days") or 3) * 86400
-            freshn = sorted([x for x in items if ts_of(x) and now - ts_of(x) <= max_age], key=lambda x: -ts_of(x))
-            fid = {x["id"] for x in freshn}
-            rest = sorted([x for x in items if x["id"] not in fid], key=lambda x: -ts_of(x))
-            lst = freshn
-            if len(lst) < p.get("min_keep", 15):        # 新しいものが少なければ、古いものでも最低本数は確保
-                lst = lst + rest[: p.get("min_keep", 15) - len(lst)]
-        elif c != "mv":          # docs ほか: 新着 → 標準リスト → その他（新しい順）
-            newf = sorted([x for x in items if x["id"] in fresh[c]], key=lambda x: -ts_of(x))
-            st = [x for x in items if x.get("s") and x["id"] not in fresh[c]]
-            oth = sorted([x for x in items if not x.get("s") and x["id"] not in fresh[c]], key=lambda x: -ts_of(x))
-            lst = newf + st + oth
-        else:   # mv: 厳選(標準)は全部残し、新着+既存の新しい順で上限まで
-            st = [x for x in items if x.get("s")]
-            oth = sorted([x for x in items if not x.get("s")], key=lambda x: -ts_of(x))
-            lst = st + oth
-        pool[c] = lst[: p.get("cap", 60) + 20]
-
-    # 長さが分からない動画（RSS由来）は yt-dlp があれば調べ、上限以上・ライブなら外す（結果は durs に記憶）
-    unk_items = {x["id"]: ts_of(x) for c in C.CATS for x in pool[c] if not x.get("d") and x["id"] not in durs}
-    unk = sorted(unk_items, key=lambda i: -unk_items[i])              # 新しいものから調べる
-    probed = durations(unk) if unk else {}
-    for i, (dur, live) in probed.items():
-        if live:
-            bad[i] = now
-        elif dur:
-            durs[i] = dur
-    for c in C.CATS:
-        for x in pool[c]:
-            if not x.get("d") and durs.get(x["id"]):
-                x["d"] = durs[x["id"]]
-        pool[c] = [x for x in pool[c] if x["id"] not in bad and not (x.get("d") and x["d"] >= cap)]
+        items = [x for x in merged[c].values() if x["id"] not in bad and x["id"] not in live_ids and is_ok(x, cap)]   # ★長さ不明は落とす
+        pool[c] = order_cat(c, items, set(fresh[c]), pol[c], now)[: pol[c].get("cap", 60) + 20]
 
     # 埋め込み可否 (oEmbed): 最近確認済みの動画は飛ばす
     need = sorted({x["id"] for c in C.CATS for x in pool[c] if now - verified.get(x["id"], 0) > VERIFY_TTL})
@@ -389,13 +524,18 @@ def compose(cfg, static, cache, fetched, now, verify=verify_ids, static_gen="", 
     out = {}
     for c in C.CATS:
         lst = [x for x in pool[c] if x["id"] not in dropped][: cfg["policy"][c].get("cap", 60)]
-        if not lst:                                        # 万一空なら標準リストを最低限として使う
-            lst = [dict(x, p=0, a=0, s=1) for x in static[c] if not (x.get("d") and x["d"] >= cap)]
+        if not lst:                                        # 万一空なら標準リスト（これも厳格フィルタ済みのもの）を最低限として使う
+            lst = [dict(x, p=0, a=0, s=1) for x in static[c] if is_ok(x, cap) and x["id"] not in bad and x["id"] not in live_ids]
         out[c] = lst
     alive = {x["id"] for c in C.CATS for x in out[c]}
     verified = {k: v for k, v in verified.items() if k in alive and now - v < 30 * 86400}
-    durs = dict(list(durs.items())[-3000:])                           # 長さの記憶（上限以上だったものも覚えておき、再確認しない）
+    # 長さの記憶: 出力中の動画 + ライブ判定 + 失敗中(再挑戦用)を優先して残す。上限 4000
+    keep = sorted(durs.items(), key=lambda kv: (kv[0] in alive or kv[1][1] == 1, kv[1][2]))[-4000:]
+    durs = dict(keep)
     old_ids = {x["id"] for c in C.CATS for x in old[c].values()}
     added = len({i for c in C.CATS for i in fresh[c]} - old_ids)
+    n_unknown = sum(1 for c in C.CATS for x in merged[c].values() if not x.get("d") and usable(x))
     return {"videos": out, "verified": verified, "bad": bad, "durs": durs}, {"channels_ok": n_ok, "channels_failed": n_fail,
-                                                              "new": added, "dropped": len(dropped)}
+                                                              "new": added, "dropped": len(dropped), "probed": probed_n,
+                                                              "probe_ok": _probe_stats["ok"], "probe_fail": _probe_stats["fail"],
+                                                              "probe_err": _probe_stats["err"], "unknown_left": n_unknown}

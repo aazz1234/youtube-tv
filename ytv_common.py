@@ -136,3 +136,23 @@ def http_get(url, timeout=20, retries=2, retry_codes=(429, 500, 502, 503, 404), 
         if attempt < retries - 1:
             time.sleep(sleep * (attempt + 1))
     return st, body
+
+
+# ------------------------------------------------------------------ 埋め込みフォールバックリスト（HTML 内の /*VIDEOS_START*/ ～ /*VIDEOS_END*/）
+DATA_RE = re.compile(r"(/\*VIDEOS_START\*/).*?(/\*VIDEOS_END\*/)", re.S)
+
+
+def sync_embedded(html_path, generated, videos):
+    """HTML に埋め込んだ内蔵リスト（videos.json が取れないときのフォールバック）を、いまの（厳格フィルタ済みの）リストに揃える。変更したら True。"""
+    with open(html_path, encoding="utf-8") as f:
+        html = f.read()
+    if not DATA_RE.search(html):
+        return False
+    js = json.dumps({"generated": generated, "videos": videos}, ensure_ascii=False, separators=(",", ":"))
+    js = js.replace("</", "<\\/").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    new = DATA_RE.sub(lambda m: m.group(1) + "const DATA=" + js + ";" + m.group(2), html, count=1)
+    if new == html:
+        return False
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(new)
+    return True

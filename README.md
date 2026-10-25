@@ -10,7 +10,10 @@
 
 ## 動画リストの自動更新
 - `.github/workflows/refresh.yml` が **6時間ごと**（UTC `17 */6 * * *`）に `refresh_site.py` を実行し、`videos.json` を更新します。
-- 取得は RSS → yt-dlp → だめなら前回の結果を保持。全部失敗したときや、前回の50%未満になるときは更新しません（コミットされません）。
+- 取得は yt-dlp（チャンネルの /videos タブ一覧。長さ duration つき）+ RSS（公開日時）。取れなければ RSS だけ → 前回の結果を保持。全部失敗したときや、前回の有効分の50%未満になるときは更新しません（コミットされません）。
+- **厳格フィルタ**: `videos.json` には「長さ d が分かっていて、20秒以上 10分(600秒)未満」で、ライブ/配信予定/配信アーカイブ（yt-dlp の `live_status` が is_live / is_upcoming / post_live、または `was_live`）でない動画だけを入れます。長さ不明の動画は入れません。
+  RSS 由来などで長さが無い動画は、yt-dlp で1本ずつ確認します（1回の更新で最大150本。結果は `state.json` の `durs` に記憶。確認に失敗したものも記憶して次回また試し、それまでは出力しません）。
+- テスト: `python -m unittest discover -s tests`（サーバ側の厳格フィルタ）/ `cd tests/js && npm install && npm test`（native.html / index.html。jsdom）
 - 手動で今すぐ更新: GitHub のリポジトリ → **Actions** → *refresh video list* → **Run workflow**。
   またはコマンド: `gh workflow run refresh.yml -R aazz1234/youtube-tv`
 - ページの 🔄 ボタンは、最新の `videos.json` を取り直すだけです。

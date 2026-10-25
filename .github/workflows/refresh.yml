@@ -26,8 +26,15 @@ jobs:
       - name: Install yt-dlp
         run: pip install --upgrade yt-dlp
 
-      # 失敗したとき（全チャンネル取得不可 / 前回の50%未満 / エラー）は終了コード1で止まり、コミットされません
+      - name: Unit tests (strict filter)
+        continue-on-error: true
+        run: python -m unittest discover -s tests
+
+      # 厳格: 長さが分かっていて 20秒以上10分未満・ライブ/配信アーカイブでない動画だけを残す。長さ不明の動画は1回に最大 RESOLVE_MAX 本ずつ調べる（残りは次回）
+      # 失敗したとき（全チャンネル取得不可 / 前回の有効分の50%未満 / エラー）は終了コード1で止まり、コミットされません
       - name: Refresh video list
+        env:
+          RESOLVE_MAX: '150'
         run: python refresh_site.py
 
       - name: Commit if changed
