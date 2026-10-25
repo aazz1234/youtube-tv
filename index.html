@@ -13,18 +13,44 @@
   #stage{position:fixed;inset:0;background:#000}
   #stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
   /* iframe の上に透明な板を置く: マウス移動を検知してUIを出すため/YouTube側UIへの誤クリック防止 */
-  #shield{position:absolute;inset:0;z-index:5}
+  #shield{position:absolute;inset:0;z-index:5;pointer-events:auto}
   body.idle #shield{cursor:none}
+  /* 自動再生ブロック時は #shield を無効にするので、代わりに画面の四辺に細い透明ストリップを置いてマウス移動でUIを呼び戻す */
+  .edge{position:fixed;z-index:6;display:none;background:transparent}
+  body.fallback .edge{display:block}
+  #eT{top:0;left:0;right:0;height:56px}
+  #eB{bottom:0;left:0;right:0;height:72px}
+  #eL{top:0;bottom:0;left:0;width:28px}
+  #eR{top:0;bottom:0;right:0;width:28px}
 
   .bar{position:absolute;left:0;right:0;z-index:10;padding:14px 22px;display:flex;align-items:center;gap:10px;
     transition:opacity .5s ease;pointer-events:none}
   .bar > *{pointer-events:auto}
   #top{top:0;background:linear-gradient(rgba(0,0,0,.75),rgba(0,0,0,0));padding-bottom:40px}
-  #bottom{bottom:6px;justify-content:center;flex-wrap:wrap;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.75));padding-top:40px}
+  #bottom{bottom:0;flex-direction:column;align-items:center;gap:8px;padding:26px 8px 4px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.75))}
+  #ctrl{display:flex;flex-wrap:nowrap;justify-content:center;align-items:center;gap:6px;max-width:100%}
+  #ctrl button{padding:0 10px;height:34px;line-height:1;font-size:14px;flex:none}
+  #ctrl .sep{height:22px;margin:0 2px}
+  #genrePanel{display:none;max-width:min(960px,100%);background:rgba(15,15,15,.82);border:1px solid rgba(255,255,255,.18);border-radius:12px;
+    padding:10px 12px;backdrop-filter:blur(6px);flex-direction:column;align-items:center;gap:8px}
+  #genrePanel.open{display:flex}
+  #genreLine{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 14px}
+  #bGenre.on{background:rgba(255,255,255,.9);color:#111;border-color:#fff}
+  #bPin.on{background:rgba(255,255,255,.9);color:#111;border-color:#fff}
+  @media (max-width:760px){
+    #ctrl .lb{display:none}
+    #ctrl button{padding:0 8px}
+  }
+  @media (max-width:480px){
+    #ctrl{gap:4px}
+    #ctrl button{padding:0 6px;font-size:13px}
+    #ctrl .sep{display:none}
+    #bottom{padding-left:4px;padding-right:4px}
+  }
   body.idle .bar{opacity:0}
   body.idle .bar > *{pointer-events:none}
   #badge{flex:none;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:#c33;color:#fff;white-space:nowrap}
-  #catBtns{display:contents}
+  #catBtns{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
   #titlebox{min-width:0}
   #title{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 3px #000}
   #chan{font-size:12px;color:#bbb;text-shadow:0 1px 3px #000}
@@ -33,7 +59,7 @@
   button:hover{background:rgba(70,70,70,.9)}
   button.cat.on{background:rgba(255,255,255,.9);color:#111;border-color:#fff;font-weight:700}
   .sep{width:1px;height:26px;background:rgba(255,255,255,.25);margin:0 4px}
-  #listInfo{font-size:12px;color:#aab3c2;margin-left:6px;white-space:nowrap;text-shadow:0 1px 3px #000}
+  #listInfo{font-size:12px;color:#aab3c2;white-space:nowrap;text-shadow:0 1px 3px #000}
   #lNative{font-size:12px;color:#8fc4ff;white-space:nowrap;text-shadow:0 1px 3px #000}
   #bUpdate:disabled{opacity:.55;cursor:wait}
   #progress{position:absolute;left:0;bottom:0;height:3px;width:0;background:#e33;z-index:11;transition:opacity .5s}
@@ -85,19 +111,29 @@
   <div id="titlebox"><div id="title">読み込み中…</div><div id="chan"></div></div>
 </div>
 
+<div class="edge" id="eT"></div><div class="edge" id="eB"></div><div class="edge" id="eL"></div><div class="edge" id="eR"></div>
+
 <div id="bottom" class="bar">
-  <button id="bPrev" title="前の動画 (P)">⏮ 前へ</button>
-  <button id="bPause" title="一時停止/再生 (スペース)">⏯ 一時停止</button>
-  <button id="bNext" title="スキップ (N)">⏭ スキップ</button>
-  <span class="sep"></span>
-  <span id="catBtns"></span>
-  <span class="sep"></span>
-  <button id="bShuffle" title="並び順をシャッフルし直す (S)">🔀 シャッフル</button>
-  <button id="bMute" title="ミュート (M)">🔊</button>
-  <button id="bFull" title="全画面 (F)">⛶ 全画面</button>
-  <button id="bUpdate" title="最新の動画リスト(videos.json)を取得し直します">🔄 更新</button>
-  <a id="lNative" href="native.html" target="_blank" rel="noopener" title="YouTube本体のページで再生します（Enhancer for YouTube が使えます）">YouTube本体で再生（Enhancer対応）</a>
-  <span id="listInfo" title="動画リストの最終更新（GitHub Actions が自動更新します）"></span>
+  <div id="genrePanel">
+    <span id="catBtns"></span>
+    <div id="genreLine">
+      <a id="lNative" href="native.html" target="_blank" rel="noopener" title="YouTube本体のページで再生します（Enhancer for YouTube が使えます）">YouTube本体で再生（Enhancer対応）</a>
+      <span id="listInfo" title="動画リストの最終更新（GitHub Actions が自動更新します）"></span>
+      <button id="bPin" title="操作バーを常時表示 (H)">📌 常時表示</button>
+    </div>
+  </div>
+  <div id="ctrl">
+    <button id="bPrev" title="前の動画 (P)"><span class="ic">⏮</span><span class="lb"> 前へ</span></button>
+    <button id="bPause" title="一時停止/再生 (スペース)"><span class="ic">⏯</span><span class="lb"> 一時停止</span></button>
+    <button id="bNext" title="スキップ (N)"><span class="ic">⏭</span><span class="lb"> スキップ</span></button>
+    <span class="sep"></span>
+    <button id="bShuffle" title="並び順をシャッフルし直す (S)">🔀</button>
+    <button id="bMute" title="ミュート (M)">🔊</button>
+    <button id="bFull" title="全画面 (F)"><span class="ic">⛶</span><span class="lb"> 全画面</span></button>
+    <button id="bUpdate" title="最新の動画リスト(videos.json)を取得し直します"><span class="ic">🔄</span><span class="lb"> 更新</span></button>
+    <span class="sep"></span>
+    <button id="bGenre" title="ジャンルの選択 (G)" aria-expanded="false"><span class="ic">☰</span><span class="lb"> ジャンル</span> ▾</button>
+  </div>
 </div>
 <div id="progress"></div>
 <div id="toast"></div>
@@ -109,7 +145,7 @@
   <h1>クリックで再生開始</h1>
   <div class="sub"><span id="subLead">10分未満の動画だけを、いろいろなジャンルで自動で流し続けます</span><br>
     <span id="subCats"></span><br>
-    N: スキップ ／ F: 全画面 ／ スペース: 一時停止 ／ P: 前へ ／ M: ミュート ／ 1〜0: ジャンルのON/OFF</div>
+    N: スキップ ／ F: 全画面 ／ スペース: 一時停止 ／ P: 前へ ／ M: ミュート ／ 1〜0: ジャンルのON/OFF ／ H: バー常時表示</div>
   <a id="sNative" href="native.html" onclick="event.stopPropagation()" style="font-size:15px;color:#8fc4ff">YouTube本体で再生（Enhancer対応）→</a>
   <div id="warn"></div>
   <details id="help"><summary>再生されない場合のヒント（Brave など）</summary>
@@ -448,6 +484,7 @@ function onFail(code){
 }
 
 /* ---------- UI ---------- */
+function setBtn(id, ic, lb){ const b = $(id); b.innerHTML = '<span class="ic"></span><span class="lb"></span>'; b.firstChild.textContent = ic; b.lastChild.textContent = lb; }
 function showMsg(html){ $('msgbox').innerHTML = html; $('msg').style.display='flex'; }
 function hideMsg(){ $('msg').style.display='none'; }
 function buildCatButtons(){                 // ジャンルのボタンは CFG（channels.json の categories）から作る
@@ -485,7 +522,7 @@ function togglePause(){
 }
 function syncPause(){
   if(!player) return; let st=-1; try{ st = player.getPlayerState(); }catch(e){}
-  $('bPause').textContent = (st===2) ? '▶ 再生' : '⏯ 一時停止';
+  setBtn('bPause', (st===2) ? '▶' : '⏯', (st===2) ? ' 再生' : ' 一時停止');
 }
 function toggleMute(){
   if(!player) return;
@@ -519,16 +556,42 @@ document.addEventListener('keydown', e=>{
   const map = {n:goNext, N:goNext, ArrowRight:goNext, p:goPrev, P:goPrev, b:goPrev, ArrowLeft:goPrev,
                f:toggleFull, F:toggleFull, m:toggleMute, M:toggleMute, s:doShuffle, S:doShuffle,
                ' ':togglePause, k:togglePause, K:togglePause,
+               h:()=>{ setPinned(!pinned); toast(pinned ? '操作バーを常時表示 (H で解除)' : '常時表示を解除'); }, H:null,
+               g:()=>setGenre(!$('genrePanel').classList.contains('open')), G:null,
                };
+  map.H = map.h; map.G = map.g;
   CATLIST.slice(0,10).forEach((c,i)=>{ map[String((i+1)%10)] = ()=>toggleCat(c.id); });     // 1〜9,0 でジャンルのON/OFF
   if(map[k]){ e.preventDefault(); map[k](); wake(); }
 });
 
-/* マウスが数秒動かなければUIを隠す */
-let idleTimer;
-function wake(){ document.body.classList.remove('idle'); clearTimeout(idleTimer); idleTimer = setTimeout(()=>{ if(started) document.body.classList.add('idle'); }, 3000); }
-['mousemove','mousedown','touchstart'].forEach(ev=>document.addEventListener(ev, wake, {passive:true}));
-document.addEventListener('fullscreenchange', ()=>{ $('bFull').textContent = document.fullscreenElement ? '⛶ 全画面解除' : '⛶ 全画面'; });
+/* マウスが数秒動かなければUIを隠す（バー上にマウスがある間・ジャンル欄を操作中・H で固定した間は隠さない） */
+const IDLE_MS = 8000;
+let idleTimer, overBar = false, pinned = false;
+function wake(){
+  document.body.classList.remove('idle'); clearTimeout(idleTimer);
+  idleTimer = setTimeout(function tick(){
+    if(!started) return;
+    if(overBar || pinned){ idleTimer = setTimeout(tick, 1000); return; }
+    document.body.classList.add('idle');
+  }, IDLE_MS);
+}
+['mousemove','mousedown','pointermove','touchstart','wheel'].forEach(ev=>document.addEventListener(ev, wake, {passive:true}));
+document.addEventListener('keydown', wake, {passive:true});                                   // どのキーでも呼び戻す
+window.addEventListener('focus', wake);                                                        // ページにフォーカスが戻ったとき
+window.addEventListener('blur', ()=>{ if(document.activeElement && document.activeElement.tagName==='IFRAME') wake(); });   // iframe をクリックしたとき
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) wake(); });
+['bottom','top'].forEach(id=>{ const el = $(id);
+  el.addEventListener('mouseenter', ()=>{ overBar = true; wake(); });
+  el.addEventListener('mouseleave', ()=>{ overBar = false; wake(); });
+  el.addEventListener('touchstart', ()=>{ overBar = true; wake(); }, {passive:true});
+});
+document.addEventListener('touchend', ()=>{ overBar = false; }, {passive:true});
+['eT','eB','eL','eR'].forEach(id=>{ const el = $(id); ['mousemove','mouseenter','touchstart'].forEach(ev=>el.addEventListener(ev, wake, {passive:true})); });
+function setPinned(on){ pinned = !!on; $('bPin').classList.toggle('on', pinned); wake(); }
+$('bPin').onclick = ()=>{ setPinned(!pinned); toast(pinned ? '操作バーを常時表示' : '常時表示を解除'); };
+function setGenre(open){ $('genrePanel').classList.toggle('open', open); $('bGenre').classList.toggle('on', open); $('bGenre').setAttribute('aria-expanded', open ? 'true' : 'false'); wake(); }
+$('bGenre').onclick = ()=>setGenre(!$('genrePanel').classList.contains('open'));
+document.addEventListener('fullscreenchange', ()=>{ setBtn('bFull', '⛶', document.fullscreenElement ? ' 全画面解除' : ' 全画面'); });
 
 /* 進行バー */
 setInterval(()=>{
